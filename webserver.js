@@ -5,12 +5,15 @@ import express from 'express';
 import multer from 'multer';
 import jsonwebtoken from 'jsonwebtoken';
 import bcrypt from 'bcrypt'
+import { login } from './functions/login.js';
 const saltRounds = 10
 const upload = multer()
 const app = express()
 const port = 3001
 app.use(express.json())
 const db = new Database('db/projectDB.sqlite');
+
+const secretKey = '6ngQ%q^:+=M)+.p-[nTcUYx5MJDR^J!Aq+_u"BkK!%eVO9g]vJBpPBs@KndAH%Ib%k.Thg:|O<x)sfG($-k=<)YA]0olRr)V'
  
 const ensureToken = (req,res,next) =>{
   const bearerHeader = req.headers["authorization"]
@@ -35,10 +38,11 @@ app.get('/api', (req, res) => {
 
 app.post('/api/login', upload.array(), (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
-
   const {password} = req.body
   const {username} = req.body
 
+  //login(username,password,db)
+  
   if ((password || username) === ''){
     res.json({Message: "No username or password"}).end()
     console.log("WRONG");
@@ -53,13 +57,15 @@ app.post('/api/login', upload.array(), (req, res) => {
       if (err){
         res.json(err)
       }else if(result == true){
-        const token = jsonwebtoken.sign(result, 'my_secret_key')
-        res.json({
+        const token = jsonwebtoken.sign(result, secretKey)
+        return res.json({
           userID: userID.userID,
           token: token
         })
+        
       }else{
-        res.json({Message: "No login"})
+        return res.json({Message: "No login"})
+        
       }
     })  
   }
@@ -92,7 +98,7 @@ app.post('/api/signup', upload.array(), (req, res) => {
           if (err){
             res.json(err)
           }else if(result == true){
-            const token = jsonwebtoken.sign(result, 'my_secret_key')
+            const token = jsonwebtoken.sign(result, secretKey)
             res.json({
               Status: "200",
               Message: "Account Created",
@@ -107,7 +113,7 @@ app.post('/api/signup', upload.array(), (req, res) => {
 })
 
 app.post('/api/addtask'), ensureToken, upload.array(), (req, res) => {
-  jsonwebtoken.verify(req.token, 'my_secret_key', (err, data) => {
+  jsonwebtoken.verify(req.token, secretKey, (err, data) => {
     if(err){
       res.sendStatus(403)
     }else{
@@ -124,7 +130,7 @@ app.post('/api/addtask'), ensureToken, upload.array(), (req, res) => {
 }
 
 app.get('/api/recievetasks'), ensureToken, upload.array(), (req, res) => {
-  jsonwebtoken.verify(req.token, 'my_secret_key', (err, data) => {
+  jsonwebtoken.verify(req.token, secretKey, (err, data) => {
     if(err){
       res.sendStatus(403)
     }else{
@@ -145,7 +151,7 @@ app.get('/api/userstasks'), upload.array(), (req, res) => {
 }
 
 app.get('/api/protected', ensureToken, (req, res) => {
-  jsonwebtoken.verify(req.token, 'my_secret_key', (err, data) => {
+  jsonwebtoken.verify(req.token, secretKey, (err, data) => {
     if(err){
       res.sendStatus(403)
     }else{
