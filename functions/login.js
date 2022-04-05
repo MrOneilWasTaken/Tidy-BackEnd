@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt'
 import jsonwebtoken from 'jsonwebtoken';
 
-export function login(username,password,db){
+export const login = (req,res) => {
   
   
 
@@ -22,12 +22,12 @@ export function login(username,password,db){
         const token = jsonwebtoken.sign(result, secretKey)
         return res.json({
           userID: userID.userID,
+          username: username,
           token: token
         })
         
       }else{
         return res.json({Message: "No login"})
-        
       }
     })  
   }

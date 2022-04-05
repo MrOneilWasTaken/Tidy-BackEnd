@@ -11,13 +11,18 @@ const upload = multer()
 const app = express()
 const port = 3001
 app.use(express.json())
+app.use(function(req, res, next) {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, authorization");
+  next();
+})
 const db = new Database('db/projectDB.sqlite');
 
 const secretKey = '6ngQ%q^:+=M)+.p-[nTcUYx5MJDR^J!Aq+_u"BkK!%eVO9g]vJBpPBs@KndAH%Ib%k.Thg:|O<x)sfG($-k=<)YA]0olRr)V'
- 
+
 const ensureToken = (req,res,next) =>{
   const bearerHeader = req.headers["authorization"]
-  if (typeof bearerHeader !== undefined){
+  if (typeof bearerHeader !== "undefined"){
     const bearer = bearerHeader.split(" ")
     const bearerToken = bearer[1]
     req.token = bearerToken
@@ -30,47 +35,73 @@ const ensureToken = (req,res,next) =>{
 // regex api switch statement insert here at some point 
 // also shove each of these endpoints into their own files, login.js, etc.
 
+// Base API
 app.get('/api', (req, res) => {
   res.json({
-    text: "my api"
+    text: "yay"
+  })
+})
+// Test protected stuff
+app.get('/api/protected', ensureToken, (req, res) => {
+  jsonwebtoken.verify(req.token, secretKey, (err, data) => {
+    if(err){
+      res.sendStatus(403)
+    }else{
+      res.json({
+        text: "this is protected",
+        data: data
+      })
+    }
   })
 })
 
-app.post('/api/login', upload.array(), (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  const {password} = req.body
-  const {username} = req.body
 
-  //login(username,password,db)
-  
-  if ((password || username) === ''){
-    res.json({Message: "No username or password"}).end()
-    console.log("WRONG");
-  }else{
-    let stmt = db.prepare('SELECT password FROM users WHERE username = ?')
-    const hash = stmt.get(username) 
+// Needs work - front end should just send api add task when formsubmit
+app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
+  jsonwebtoken.verify(req.token, secretKey, (err) => {
+    if(err){
+      res.send({
+        status: "error",
+        Message: "Please provide a valid logged in token",
+      })
+    }else{
+      const task = req.body 
 
-    stmt = db.prepare('SELECT userID FROM users WHERE username = ?')
-    const userID = stmt.get(username)
+      let stmt = db.prepare('INSERT INTO userstasks (userID, dayID, content, done) VALUES (?, ?, ?, ?)')
+      stmt.run(task.userID, task.dayID, task.content, ((task.done) ? 1 : 0 ))
+
+      res.send({
+        status: 204,
+        Message: "Tasks uploaded",
+      })          
+    }
+  })
   
-    bcrypt.compare(password, hash.password, (err, result) => {
-      if (err){
-        res.json(err)
-      }else if(result == true){
-        const token = jsonwebtoken.sign(result, secretKey)
-        return res.json({
-          userID: userID.userID,
-          token: token
-        })
-        
-      }else{
-        return res.json({Message: "No login"})
-        
-      }
-    })  
-  }
 })
 
+
+
+
+// Maybe done
+app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
+  jsonwebtoken.verify(req.token, secretKey, (err) => {
+    if(err){
+      res.sendStatus(403)
+    }else{
+      const {userID} = req.query
+      const recievedTasks = db.prepare('SELECT * FROM userstasks WHERE userID = ?').all(userID)
+      res.send({recievedTasks})
+    }
+  })
+})
+
+// Needs work
+app.get('/api/userstasks', (req, res) => {
+  const stmt = db.prepare('SELECT * FROM users').all()
+  res.send({stmt})
+})
+
+// Done
 app.post('/api/signup', upload.array(), (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
 
@@ -90,7 +121,7 @@ app.post('/api/signup', upload.array(), (req, res) => {
 
         let loginstmt = db.prepare('SELECT password FROM users WHERE username = ?')
         let hashedpssword = loginstmt.get(username) 
-
+        
         stmt = db.prepare('SELECT userID FROM users WHERE username = ?')
         const userID = stmt.get(username)
       
@@ -103,6 +134,7 @@ app.post('/api/signup', upload.array(), (req, res) => {
               Status: "200",
               Message: "Account Created",
               userID: userID.userID,
+              username: username,
               token: token
             })
           } 
@@ -112,70 +144,48 @@ app.post('/api/signup', upload.array(), (req, res) => {
   }
 })
 
-app.post('/api/addtask'), ensureToken, upload.array(), (req, res) => {
-  jsonwebtoken.verify(req.token, secretKey, (err, data) => {
-    if(err){
-      res.sendStatus(403)
-    }else{
-      res.setHeader('Access-Control-Allow-Origin', '*')
-      let stmt = db.prepare('INSERT INTO userstasks (taskID, userID, dayID, content, done) VALUES (?, ?, ?, ?, ?)')
-      const info = stmt.run(req.taskID, req.userID, req.dayID, req.content, req.done)
-      res.json({
-        status: 204,
-        Message: "Tasks uploaded",
+// Done
+app.post('/api/login', upload.array(), (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  const {password} = req.body
+  const {username} = req.body
+
+  //login(username,password,db)
+
+  if ((password || username) === ''){
+    res.json({Message: "No username or password"}).end()
+    console.log("WRONG");
+  }else{
+    let stmt = db.prepare('SELECT password FROM users WHERE username = ?')
+    const hash = stmt.get(username) 
+
+    stmt = db.prepare('SELECT userID FROM users WHERE username = ?')
+    const userID = stmt.get(username)
+  
+    bcrypt.compare(password, hash.password, (err, result) => {
+      if (err){
+        res.json(err)
+      }else if(result == true){
+        const token = jsonwebtoken.sign(result, secretKey)
+        return res.json({
+          userID: userID.userID,
+          username: username,
+          token: token
+        })
         
-      })
-    }
-  })
-}
-
-app.get('/api/recievetasks'), ensureToken, upload.array(), (req, res) => {
-  jsonwebtoken.verify(req.token, secretKey, (err, data) => {
-    if(err){
-      res.sendStatus(403)
-    }else{
-      const stmt = db.prepare('SELECT * FROM userstasks WHERE userID = ?').get(userID)
-      res.json({
-        text: "this is protected",
-        data: data
-      })
-    }
-  })
-}
-
-app.get('/api/userstasks'), upload.array(), (req, res) => {
-
-  res.send({
-    stmt
-  })
-}
-
-app.get('/api/protected', ensureToken, (req, res) => {
-  jsonwebtoken.verify(req.token, secretKey, (err, data) => {
-    if(err){
-      res.sendStatus(403)
-    }else{
-      res.json({
-        text: "this is protected",
-        data: data
-      })
-    }
-  })
-  
+      }else{
+        return res.json({Message: "No login"})
+        
+      }
+    })  
+  }
 })
 
+// Done
 app.get('/api/users', (req, res) => {
-  const stmt = db.prepare('SELECT * FROM users').all()
-  
-  res.send({stmt})
+  const userList = db.prepare('SELECT * FROM users').all()
+  res.send({userList})
 })
-
-app.get('/api/userstasks', (req, res) => {
-  const stmt = db.prepare('SELECT * FROM users').all()
-  
-  res.send({stmt})
-})
-
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
