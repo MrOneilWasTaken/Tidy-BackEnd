@@ -55,6 +55,27 @@ app.get('/api/protected', ensureToken, (req, res) => {
   })
 })
 
+app.post('/api/updatetask', ensureToken, (req,res) =>{
+  jsonwebtoken.verify(req.token, secretKey, (err) => {
+    if(err){
+      res.send({
+        status: "error",
+        Message: "An error has occurred updating this record",
+      })
+    }else{
+      // Logic here for updating thing
+      // Probably need task ID sent
+      const task = req.body
+      
+      const stmt = db.prepare('UPDATE userstasks SET done = ? WHERE taskID = ?')
+      stmt.run((task.done) ? 1 : 0 , task.taskid)
+
+      res.send({
+        Message: "Update recieved"
+      })
+    }
+  })
+})
 
 // Needs work - front end should just send api add task when formsubmit
 app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
@@ -68,7 +89,7 @@ app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
       const task = req.body 
 
       let stmt = db.prepare('INSERT INTO userstasks (userID, dayID, content, done) VALUES (?, ?, ?, ?)')
-      stmt.run(task.userID, task.dayID, task.content, ((task.done) ? 1 : 0 ))
+      stmt.run(task.userid, task.dayid, task.content, ((task.done) ? 1 : 0 ))
 
       res.send({
         status: 204,
@@ -76,11 +97,7 @@ app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
       })          
     }
   })
-  
 })
-
-
-
 
 // Maybe done
 app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
@@ -90,7 +107,12 @@ app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
     }else{
       const {userID} = req.query
       const recievedTasks = db.prepare('SELECT * FROM userstasks WHERE userID = ?').all(userID)
-      res.send({recievedTasks})
+      const filtered = recievedTasks.filter((task) => {
+        if (task.done === 0) return true;
+        return false;
+      })
+      console.log(filtered);
+      res.send(filtered)
     }
   })
 })
