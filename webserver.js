@@ -63,13 +63,9 @@ app.post('/api/updatetask', ensureToken, (req,res) =>{
         Message: "An error has occurred updating this record",
       })
     }else{
-      // Logic here for updating thing
-      // Probably need task ID sent
       const task = req.body
-      
       const stmt = db.prepare('UPDATE userstasks SET done = ? WHERE taskID = ?')
       stmt.run((task.done) ? 1 : 0 , task.taskid)
-
       res.send({
         Message: "Update recieved"
       })
@@ -77,7 +73,7 @@ app.post('/api/updatetask', ensureToken, (req,res) =>{
   })
 })
 
-// Needs work - front end should just send api add task when formsubmit
+// Done
 app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
@@ -99,11 +95,54 @@ app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
   })
 })
 
+// Should work well, just needs front end done
+app.get('/api/leaderboard', ensureToken, upload.array(), (req,res) => {
+  jsonwebtoken.verify(req.token, secretKey, (err) => {
+    if(err){
+      res.send({
+        StatusCode: 403,
+        Message: "Please log in"
+      })
+    }else{
+      // Selecting UserID, username,
+
+      const allUsersDetails = db.prepare('SELECT UserID, username FROM users').all();
+      let taskResultArray = []
+
+      allUsersDetails.forEach(user => {
+        let taskCount = {}
+        let userID = user.userID
+        let result = db.prepare('SELECT COUNT(*) FROM userstasks WHERE done = 1 AND userID = ?').all(userID) 
+        console.log(result[0]['COUNT(*)']);
+        taskCount.userID = userID 
+        taskCount.username = user.username
+        taskCount.result = result[0]['COUNT(*)']
+        taskResultArray.push(taskCount)
+
+      });
+
+      taskResultArray.sort((a,b) => {
+        return b.result - a.result
+      })
+      
+      res.send({
+        StatusCode: 200,
+        Message: "Successfully Pulled Details",
+        // UsersDetails: allUsersDetails,
+        TaskCount: taskResultArray
+      })
+    }
+  })
+})
+
 // Maybe done
 app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
-      res.sendStatus(403)
+      res.send({
+        StatusCode: 403,
+        Message: "Please log in"
+      })
     }else{
       const {userID} = req.query
       const recievedTasks = db.prepare('SELECT * FROM userstasks WHERE userID = ?').all(userID)
@@ -111,7 +150,6 @@ app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
         if (task.done === 0) return true;
         return false;
       })
-      console.log(filtered);
       res.send(filtered)
     }
   })
@@ -170,37 +208,33 @@ app.post('/api/signup', upload.array(), (req, res) => {
 app.post('/api/login', upload.array(), (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   const {password} = req.body
+  if (!password) res.send({StatusCode: 401, Message: "No Password"})
   const {username} = req.body
+  if (!username) res.send({StatusCode: 401, Message: "No Username"})
 
   //login(username,password,db)
-
-  if ((password || username) === ''){
-    res.json({Message: "No username or password"}).end()
-    console.log("WRONG");
-  }else{
-    let stmt = db.prepare('SELECT password FROM users WHERE username = ?')
-    const hash = stmt.get(username) 
-
-    stmt = db.prepare('SELECT userID FROM users WHERE username = ?')
-    const userID = stmt.get(username)
   
-    bcrypt.compare(password, hash.password, (err, result) => {
-      if (err){
-        res.json(err)
-      }else if(result == true){
-        const token = jsonwebtoken.sign(result, secretKey)
-        return res.json({
-          userID: userID.userID,
-          username: username,
-          token: token
-        })
-        
-      }else{
-        return res.json({Message: "No login"})
-        
-      }
-    })  
-  }
+  let stmt = db.prepare('SELECT password FROM users WHERE username = ?')
+  const hash = stmt.get(username) 
+
+  stmt = db.prepare('SELECT userID FROM users WHERE username = ?')
+  const userID = stmt.get(username)
+
+  bcrypt.compare(password, hash.password, (err, result) => {
+    if (err){
+      res.json(err)
+    }else if(result == true){
+      const token = jsonwebtoken.sign(result, secretKey)
+      return res.json({
+        userID: userID.userID,
+        username: username,
+        token: token
+      })
+    }else{
+      return res.json({Message: "No login"})
+      
+    }
+  })  
 })
 
 // Done
@@ -210,5 +244,5 @@ app.get('/api/users', (req, res) => {
 })
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
+  console.log(`App listening on port ${port}`)
 })
