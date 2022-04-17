@@ -1,5 +1,3 @@
-const {createHmac} = import('crypto')
-// import { login } from './functions/login';
 import Database from 'better-sqlite3';
 import express from 'express';
 import multer from 'multer';
@@ -45,8 +43,8 @@ app.get('/api', (req, res) => {
   })
 })
 
-
-// Update DB when user checks a task offapi
+// Task Stuff /=============================
+// Update DB when user checks a task off 
 app.post('/api/updatetask', ensureToken, (req,res) =>{
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
@@ -86,6 +84,54 @@ app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
       })          
     }
   })
+})
+
+// Pull through a user's details
+app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
+  jsonwebtoken.verify(req.token, secretKey, (err) => {
+    if(err){
+      res.status(500).send({
+        StatusCode: 500,
+        Message: "An error has occurred confirming token",
+      })
+    }else{
+      const {userID} = req.query
+      const recievedTasks = db.prepare('SELECT * FROM userstasks WHERE userID = ?').all(userID)
+      const filtered = recievedTasks.filter((task) => {
+        if (task.done === 0) return true;
+        return false;
+      })
+      res.status(200).send({
+        StatusCode: 200,
+        Message: "Successfully Pulled Details",
+        Tasks: filtered
+      })
+    }
+  })
+})
+
+// Stats for Profile Page
+app.get('/api/userstasks', (req, res) => {
+  if (req.query.userID) {
+    const {userID} = req.query
+    const userTasks = db.prepare('SELECT * FROM userstasks WHERE userID = ?').all(userID)
+    const userDetails = db.prepare('SELECT username FROM users WHERE userID = ?').get(userID)
+
+    const totalTaskCalc = db.prepare('SELECT COUNT(*) FROM userstasks WHERE done = 1 AND userID = ?').all(userID) 
+    const totalTaskResult = totalTaskCalc[0]['COUNT(*)']
+    
+    res.status(200).send({
+      StatusCode: 200,
+      Username: userDetails.username,
+      UsersTasks: userTasks,
+      UsersCompletedTasks: totalTaskResult
+    })
+  }else{
+    res.status(400).send({
+      StatusCode: 400,
+      Message: "Please provide a userID"
+    })
+  }
 })
 
 // Achievement stuff /===========================
@@ -237,6 +283,7 @@ app.post('/api/addachievement', ensureToken, upload.array(), (req, res) => {
   })
 })
 
+// Leaderboard stuff /===========================
 // Display all users in order of highest to lowest score
 app.get('/api/leaderboard', ensureToken, upload.array(), (req,res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
@@ -254,7 +301,6 @@ app.get('/api/leaderboard', ensureToken, upload.array(), (req,res) => {
         let taskCount = {}
         let userID = user.userID
         let result = db.prepare('SELECT COUNT(*) FROM userstasks WHERE done = 1 AND userID = ?').all(userID) 
-        console.log(result[0]['COUNT(*)']);
         taskCount.userID = userID 
         taskCount.username = user.username
         taskCount.result = result[0]['COUNT(*)']
@@ -274,54 +320,8 @@ app.get('/api/leaderboard', ensureToken, upload.array(), (req,res) => {
   })
 })
 
-// Pull through a user's details
-app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
-  jsonwebtoken.verify(req.token, secretKey, (err) => {
-    if(err){
-      res.status(500).send({
-        StatusCode: 500,
-        Message: "An error has occurred confirming token",
-      })
-    }else{
-      const {userID} = req.query
-      const recievedTasks = db.prepare('SELECT * FROM userstasks WHERE userID = ?').all(userID)
-      const filtered = recievedTasks.filter((task) => {
-        if (task.done === 0) return true;
-        return false;
-      })
-      res.status(200).send({
-        StatusCode: 200,
-        Message: "Successfully Pulled Details",
-        Tasks: filtered
-      })
-    }
-  })
-})
 
-// Stats for Profile Page
-app.get('/api/userstasks', (req, res) => {
-  if (req.query.userID) {
-    const {userID} = req.query
-    const userTasks = db.prepare('SELECT * FROM userstasks WHERE userID = ?').all(userID)
-    const userDetails = db.prepare('SELECT username FROM users WHERE userID = ?').get(userID)
-
-    const totalTaskCalc = db.prepare('SELECT COUNT(*) FROM userstasks WHERE done = 1 AND userID = ?').all(userID) 
-    const totalTaskResult = totalTaskCalc[0]['COUNT(*)']
-    
-    res.status(200).send({
-      StatusCode: 200,
-      Username: userDetails.username,
-      UsersTasks: userTasks,
-      UsersCompletedTasks: totalTaskResult
-    })
-  }else{
-    res.status(400).send({
-      StatusCode: 400,
-      Message: "Please provide a userID"
-    })
-  }
-})
-
+// User Authentication /===========================
 // Adds a new user's details to the database and signs in
 app.post('/api/signup', upload.array(), (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -377,7 +377,6 @@ app.post('/api/login', upload.array(), (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   if (req.body.username) {
     if (req.body.password) {
-      console.log(req.body);
       const {password} = req.body
       const {username} = req.body
       let stmt = db.prepare('SELECT password FROM users WHERE username = ?')
@@ -419,6 +418,7 @@ app.post('/api/login', upload.array(), (req, res) => {
   }
 })
 
+// General Purpose Endpoints /===========================
 // Gets a list of all the users in the database
 app.get('/api/users', (req, res) => {
   const userList = db.prepare('SELECT * FROM users').all()
@@ -429,6 +429,7 @@ app.get('/api/users', (req, res) => {
   })
 })
 
+// Opens the server on port 3000
 app.listen(port, () => {
   console.log(`App listening on port ${port}`)
 })
