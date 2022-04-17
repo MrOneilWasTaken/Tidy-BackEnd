@@ -1,6 +1,10 @@
 {
   "name": "kv6003project-express",
   "version": "1.0.0",
+  "engines": {
+    "node": "14.15.4"
+  },
+  "private": true,
   "description": "",
   "main": "webserver.js",
   "scripts": {
