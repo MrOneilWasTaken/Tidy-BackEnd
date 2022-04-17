@@ -3,11 +3,13 @@ import express from 'express';
 import multer from 'multer';
 import jsonwebtoken from 'jsonwebtoken';
 import bcrypt from 'bcrypt'
+import helmet from 'helmet';
 const saltRounds = 10
 const upload = multer()
 const app = express()
 const port = 3001
 app.use(express.json())
+app.use(helmet())
 app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, authorization");
@@ -65,7 +67,7 @@ app.post('/api/updatetask', ensureToken, (req,res) =>{
 })
 
 // Add a new task to the database
-app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
+app.post('/api/addtask', ensureToken,  (req, res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
       res.status(500).send({
@@ -87,7 +89,7 @@ app.post('/api/addtask', ensureToken, upload.array(), (req, res) => {
 })
 
 // Pull through a user's details
-app.get('/api/recievetasks', ensureToken, upload.array(), (req, res) => {
+app.get('/api/recievetasks', ensureToken,  (req, res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
       res.status(500).send({
@@ -136,7 +138,7 @@ app.get('/api/userstasks', (req, res) => {
 
 // Achievement stuff /===========================
 // Check achievements for a user
-app.get('/api/achievements', ensureToken, upload.array(), (req, res) => {
+app.get('/api/achievements', ensureToken,  (req, res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
       res.status(500).send({
@@ -177,28 +179,17 @@ app.post('/api/addachievement', ensureToken, upload.array(), (req, res) => {
       
       const totalTaskCalc = db.prepare('SELECT COUNT(*) FROM userstasks WHERE done = 1 AND userID = ?').all(userID) 
       const totalTaskResult = totalTaskCalc[0]['COUNT(*)']
-
-      let addAchievement
-      let achievementCheck
+      
+      const addAchievement = db.prepare('INSERT INTO userachievements VALUES (@achievementID, @userID)')
+      const achievementCheck = db.prepare('SELECT achievementID FROM userachievements WHERE achievementID = ? AND  userID = ? ')
+      const achievementCheckOne = achievementCheck.all(1, userID)
+      const achievementCheckTwo = achievementCheck.all(2, userID)
+      const achievementCheckThree = achievementCheck.all(3, userID)
 
       switch (true) {
         case totalTaskResult>=5 && totalTaskResult<10:
-          achievementCheck = db.prepare('SELECT achievementID FROM userachievements WHERE userID = ? AND achievementID = ?')
-          achievementCheck = achievementCheck.all(userID, 1)
-          if(achievementCheck.length === 0){
-            addAchievement = db.prepare('INSERT INTO userachievements VALUES (@achievementID, @userID)')
-            addAchievement.run({
-              achievementID: 1,
-              userID: userID
-            })
-            addAchievement.run({
-              achievementID: 2,
-              userID: userID
-            })
-            addAchievement.run({
-              achievementID: 3,
-              userID: userID
-            })
+          if(achievementCheckOne.length === 0){
+            addAchievement.run({achievementID: 1,userID: userID})
             res.status(201).send({
               StatusCode: 201,
               userid: userID,
@@ -210,27 +201,21 @@ app.post('/api/addachievement', ensureToken, upload.array(), (req, res) => {
               userid: userID,
               Message: "5 Tasks Completed Achievement already added"
             })
-          } 
+          }
           break;
 
         case totalTaskResult>=10 && totalTaskResult<15:
-          achievementCheck = db.prepare('SELECT achievementID FROM userachievements WHERE achievementID = ? AND  userID = ? ')
-          achievementCheck = achievementCheck.all(2, userID)
-          if(achievementCheck.length === 0){
-            addAchievement = db.prepare('INSERT INTO userachievements VALUES (@achievementID, @userID)')
-            addAchievement.run({
-              achievementID: 1,
-              userID: userID
-            })
-            addAchievement.run({
-              achievementID: 2,
-              userID: userID
-            })
+          if(achievementCheckTwo.length === 0){
+            if(achievementCheckOne.length === 0)addAchievement.run({achievementID: 1,userID: userID})
+            
+            addAchievement.run({achievementID: 2,userID: userID})
+
             res.status(201).send({
               StatusCode: 201,
               userid: userID,
               message: "10 Tasks Completed Achievement added"
             })  
+
           }else{
             res.status(200).send({
               StatusCode: 200,
@@ -240,28 +225,18 @@ app.post('/api/addachievement', ensureToken, upload.array(), (req, res) => {
           }
           break;
 
-        case totalTaskResult>=15 && totalTaskResult<16:
-          achievementCheck = db.prepare('SELECT achievementID FROM userachievements WHERE achievementID = ? AND  userID = ? ')
-          achievementCheck = achievementCheck.all(3, userID)
-          if(achievementCheck.length === 0){
-            addAchievement = db.prepare('INSERT INTO userachievements VALUES (@achievementID, @userID)')
-            addAchievement.run({
-              achievementID: 1,
-              userID: userID
-            })
-            addAchievement.run({
-              achievementID: 2,
-              userID: userID
-            })
-            addAchievement.run({
-              achievementID: 3,
-              userID: userID
-            })
+        case totalTaskResult>=15:
+          if(achievementCheckThree.length === 0){
+            if(achievementCheckTwo.length === 0)addAchievement.run({achievementID: 2,userID: userID})
+            if(achievementCheckOne.length === 0)addAchievement.run({achievementID: 1,userID: userID})
+            
+            addAchievement.run({achievementID: 3,userID: userID})
+
             res.status(201).send({
               StatusCode: 201,
               userid: userID,
               message: "15 Tasks Completed Achievement added"
-            })  
+            })
           }else{
             res.status(200).send({
               StatusCode: 200,
@@ -285,7 +260,7 @@ app.post('/api/addachievement', ensureToken, upload.array(), (req, res) => {
 
 // Leaderboard stuff /===========================
 // Display all users in order of highest to lowest score
-app.get('/api/leaderboard', ensureToken, upload.array(), (req,res) => {
+app.get('/api/leaderboard', ensureToken,  (req,res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
       res.status(500).send({
