@@ -89,7 +89,7 @@ app.post('/api/addtask', ensureToken,  (req, res) => {
 })
 
 // Pull through a user's details
-app.get('/api/recievetasks', ensureToken,  (req, res) => {
+app.get('/api/receivetasks', ensureToken,  (req, res) => {
   jsonwebtoken.verify(req.token, secretKey, (err) => {
     if(err){
       res.status(500).send({
@@ -176,7 +176,6 @@ app.post('/api/addachievement', ensureToken, upload.array(), (req, res) => {
       })
     }else{
       const {userID} = req.body
-      // v14.15.4
       const totalTaskCalc = db.prepare('SELECT COUNT(*) FROM userstasks WHERE done = 1 AND userID = ?').all(userID) 
       const totalTaskResult = totalTaskCalc[0]['COUNT(*)']
       
@@ -376,7 +375,6 @@ app.post('/api/login', upload.array(), (req, res) => {
             StatusCode: 400,
             Message: "No login"
           })
-          
         }
       })  
     }else{
